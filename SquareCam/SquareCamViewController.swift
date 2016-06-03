@@ -589,7 +589,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             
             // re-use an existing layer if possible
             while featureLayer == nil && (currentSublayer < sublayersCount) {
-                let currentLayer = sublayers[currentSublayer++]
+                let currentLayer = sublayers[currentSublayer];currentSublayer += 1
                 if currentLayer.name == "FaceLayer" {
                     featureLayer = currentLayer
                     currentLayer.hidden = false
@@ -620,7 +620,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                 
                 break // leave the layer in its last known orientation//		}
             }
-            currentFeature++
+            currentFeature += 1
         }
         
         CATransaction.commit()
