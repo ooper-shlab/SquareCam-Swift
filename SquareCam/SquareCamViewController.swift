@@ -64,22 +64,22 @@ import AssetsLibrary
 // used for KVO observation of the @"capturingStillImage" property to perform flash bulb animation
 private var AVCaptureStillImageIsCapturingStillImageContext_ = 0
 
-private func DegreesToRadians(degrees: CGFloat) -> CGFloat {return degrees * CGFloat(M_PI / 180)}
+private func DegreesToRadians(_ degrees: CGFloat) -> CGFloat {return degrees * (.pi / 180)}
 
-private func ReleaseCVPixelBuffer(pixel: CVPixelBuffer, data: UnsafePointer<Void>, size: Int) {
-    CVPixelBufferUnlockBaseAddress(pixel, 0)
+private func ReleaseCVPixelBuffer(_ pixel: CVPixelBuffer, data: UnsafeRawPointer, size: Int) {
+    CVPixelBufferUnlockBaseAddress(pixel, CVPixelBufferLockFlags(rawValue: 0))
 }
 
 // create a CGImage with provided pixel buffer, pixel buffer must be uncompressed kCVPixelFormatType_32ARGB or kCVPixelFormatType_32BGRA
-private func CreateCGImageFromCVPixelBuffer(pixelBuffer: CVPixelBuffer, inout _ imageOut: CGImage?) -> OSStatus {
+private func CreateCGImageFromCVPixelBuffer(_ pixelBuffer: CVPixelBuffer, _ imageOut: inout CGImage?) -> OSStatus {
     let err = noErr
     var bitmapInfo: CGBitmapInfo
     
     let sourcePixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
     if kCVPixelFormatType_32ARGB == sourcePixelFormat {
-        bitmapInfo = CGBitmapInfo.ByteOrder32Big.union(CGBitmapInfo(rawValue: CGImageAlphaInfo.NoneSkipFirst.rawValue))
+        bitmapInfo = CGBitmapInfo.byteOrder32Big.union(CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue))
     } else if kCVPixelFormatType_32BGRA == sourcePixelFormat {
-        bitmapInfo = CGBitmapInfo.ByteOrder32Little.union(CGBitmapInfo(rawValue: CGImageAlphaInfo.NoneSkipFirst.rawValue))
+        bitmapInfo = CGBitmapInfo.byteOrder32Little.union(CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue))
     } else {
         return -95014 // only uncompressed pixel formats
     }
@@ -88,34 +88,34 @@ private func CreateCGImageFromCVPixelBuffer(pixelBuffer: CVPixelBuffer, inout _ 
     let width = CVPixelBufferGetWidth(pixelBuffer)
     let height = CVPixelBufferGetHeight(pixelBuffer)
     
-    CVPixelBufferLockBaseAddress(pixelBuffer, 0)
-    let sourceBaseAddr = CVPixelBufferGetBaseAddress(pixelBuffer)
+    CVPixelBufferLockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
+    let sourceBaseAddr = CVPixelBufferGetBaseAddress(pixelBuffer)!
     
     let colorspace = CGColorSpaceCreateDeviceRGB()
     
-    let data = NSData(bytes: sourceBaseAddr, length: sourceRowBytes * height)
-    let provider = CGDataProviderCreateWithCFData(data)
-    let image = CGImageCreate(width, height, 8, 32, sourceRowBytes, colorspace, bitmapInfo, provider, nil, true, CGColorRenderingIntent.RenderingIntentDefault)
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, 0)
+    let data = Data(bytes: sourceBaseAddr, count: sourceRowBytes * height)
+    let provider = CGDataProvider(data: data as CFData)!
+    let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: sourceRowBytes, space: colorspace, bitmapInfo: bitmapInfo, provider: provider, decode: nil, shouldInterpolate: true, intent: CGColorRenderingIntent.defaultIntent)
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
     
     imageOut = image
     return err
 }
 
 // utility used by newSquareOverlayedImageForFeatures for
-func CreateCGBitmapContextForSize(size: CGSize) -> CGContext? {
+func CreateCGBitmapContextForSize(_ size: CGSize) -> CGContext? {
     
     let bitmapBytesPerRow = Int(size.width * 4)
     
     let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let context = CGBitmapContextCreate(nil,
-        Int(size.width),
-        Int(size.height),
-        8,      // bits per component
-        bitmapBytesPerRow,
-        colorSpace,
-        CGImageAlphaInfo.PremultipliedLast.rawValue)
-    CGContextSetAllowsAntialiasing(context, false)
+    let context = CGContext(data: nil,
+        width: Int(size.width),
+        height: Int(size.height),
+        bitsPerComponent: 8,      // bits per component
+        bytesPerRow: bitmapBytesPerRow,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    context?.setAllowsAntialiasing(false)
     return context
 }
 
@@ -123,10 +123,10 @@ func CreateCGBitmapContextForSize(size: CGSize) -> CGContext? {
 
 extension UIImage {
     
-    func imageRotatedByDegrees(degrees: CGFloat) -> UIImage! {
+    func imageRotatedByDegrees(_ degrees: CGFloat) -> UIImage! {
         // calculate the size of the rotated view's containing box for our drawing space
-        let rotatedViewBox = UIView(frame: CGRectMake(0, 0, self.size.width, self.size.height))
-        let t = CGAffineTransformMakeRotation(DegreesToRadians(degrees))
+        let rotatedViewBox = UIView(frame: CGRect(x: 0, y: 0, width: self.size.width, height: self.size.height))
+        let t = CGAffineTransform(rotationAngle: DegreesToRadians(degrees))
         rotatedViewBox.transform = t
         let rotatedSize = rotatedViewBox.frame.size
         
@@ -135,14 +135,14 @@ extension UIImage {
         let bitmap = UIGraphicsGetCurrentContext()
         
         // Move the origin to the middle of the image so we will rotate and scale around the center.
-        CGContextTranslateCTM(bitmap, rotatedSize.width/2, rotatedSize.height/2)
+        bitmap?.translateBy(x: rotatedSize.width/2, y: rotatedSize.height/2)
         
         //   // Rotate the image context
-        CGContextRotateCTM(bitmap, DegreesToRadians(degrees))
+        bitmap?.rotate(by: DegreesToRadians(degrees))
         
         // Now, draw the rotated/scaled image into the context
-        CGContextScaleCTM(bitmap, 1.0, -1.0)
-        CGContextDrawImage(bitmap, CGRectMake(-self.size.width / 2, -self.size.height / 2, self.size.width, self.size.height), self.CGImage)
+        bitmap?.scaleBy(x: 1.0, y: -1.0)
+        bitmap?.draw(self.cgImage!, in: CGRect(x: -self.size.width / 2, y: -self.size.height / 2, width: self.size.width, height: self.size.height))
         
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
@@ -161,7 +161,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private var videoDataOutput: AVCaptureVideoDataOutput?
     private var detectFaces: Bool = false
-    private var videoDataOutputQueue: dispatch_queue_t?
+    private var videoDataOutputQueue: DispatchQueue?
     private var stillImageOutput: AVCaptureStillImageOutput?
     private var flashView: UIView?
     private var square: UIImage!
@@ -178,14 +178,14 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         do {
             
             let session = AVCaptureSession()
-            if UIDevice.currentDevice().userInterfaceIdiom == .Phone {
+            if UIDevice.current.userInterfaceIdiom == .phone {
                 session.sessionPreset = AVCaptureSessionPreset640x480
             } else {
                 session.sessionPreset = AVCaptureSessionPresetPhoto
             }
             
             // Select a video device, make an input
-            let device = AVCaptureDevice.defaultDeviceWithMediaType(AVMediaTypeVideo)
+            let device = AVCaptureDevice.defaultDevice(withMediaType: AVMediaTypeVideo)
             let deviceInput = try AVCaptureDeviceInput(device: device)
             
             isUsingFrontFacingCamera = false
@@ -195,7 +195,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             
             // Make a still image output
             stillImageOutput = AVCaptureStillImageOutput()
-            stillImageOutput!.addObserver(self, forKeyPath: "capturingStillImage", options:.New, context: &AVCaptureStillImageIsCapturingStillImageContext_)
+            stillImageOutput!.addObserver(self, forKeyPath: "capturingStillImage", options:.new, context: &AVCaptureStillImageIsCapturingStillImageContext_)
             if session.canAddOutput(stillImageOutput) {
                 session.addOutput(stillImageOutput)
             }
@@ -204,24 +204,24 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             videoDataOutput = AVCaptureVideoDataOutput()
             
             // we want BGRA, both CoreGraphics and OpenGL work well with 'BGRA'
-            let rgbOutputSettings: [String: AnyObject] = [kCVPixelBufferPixelFormatTypeKey as String: kCMPixelFormat_32BGRA.l]
+            let rgbOutputSettings: [String: AnyObject] = [kCVPixelBufferPixelFormatTypeKey as String: kCMPixelFormat_32BGRA.l as AnyObject]
             videoDataOutput!.videoSettings = rgbOutputSettings
             videoDataOutput!.alwaysDiscardsLateVideoFrames = true // discard if the data output queue is blocked (as we process the still image)
             
             // create a serial dispatch queue used for the sample buffer delegate as well as when a still image is captured
             // a serial dispatch queue must be used to guarantee that video frames will be delivered in order
             // see the header doc for setSampleBufferDelegate:queue: for more information
-            videoDataOutputQueue = dispatch_queue_create("VideoDataOutputQueue", DISPATCH_QUEUE_SERIAL)
+            videoDataOutputQueue = DispatchQueue(label: "VideoDataOutputQueue", attributes: [])
             videoDataOutput!.setSampleBufferDelegate(self, queue: videoDataOutputQueue)
             
             if session.canAddOutput(videoDataOutput) {
                 session.addOutput(videoDataOutput)
             }
-            videoDataOutput!.connectionWithMediaType(AVMediaTypeVideo).enabled = false
+            videoDataOutput!.connection(withMediaType: AVMediaTypeVideo).isEnabled = false
             
             effectiveScale = 1.0;
             previewLayer = AVCaptureVideoPreviewLayer(session: session)
-            previewLayer!.backgroundColor = UIColor.blackColor().CGColor
+            previewLayer!.backgroundColor = UIColor.black.cgColor
             previewLayer!.videoGravity = AVLayerVideoGravityResizeAspect
             let rootLayer = previewView.layer
             rootLayer.masksToBounds = true
@@ -231,10 +231,10 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             
         } catch let error as NSError {
             if #available(iOS 8.0, *) {
-                let alertController = UIAlertController(title: "Failed with error \(error.code)", message: error.description, preferredStyle: .Alert)
-                let dismissAction = UIAlertAction(title: "Dismiss", style: .Cancel, handler: nil)
+                let alertController = UIAlertController(title: "Failed with error \(error.code)", message: error.description, preferredStyle: .alert)
+                let dismissAction = UIAlertAction(title: "Dismiss", style: .cancel, handler: nil)
                 alertController.addAction(dismissAction)
-                self.presentViewController(alertController, animated: true, completion: nil)
+                self.present(alertController, animated: true, completion: nil)
             } else {
                 let alertView = UIAlertView(title: "Failed with error \(error.code)",
                     message: error.description,
@@ -259,22 +259,22 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // perform a flash bulb animation using KVO to monitor the value of the capturingStillImage property of the AVCaptureStillImageOutput class
-    override func observeValueForKeyPath(keyPath: String?, ofObject object: AnyObject?, change: [String : AnyObject]?, context: UnsafeMutablePointer<Void>) {
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if context == &AVCaptureStillImageIsCapturingStillImageContext_ {
-            let isCapturingStillImage = change![NSKeyValueChangeNewKey] as! Bool
+            let isCapturingStillImage = change![NSKeyValueChangeKey.newKey] as! Bool
             
             if isCapturingStillImage {
                 // do flash bulb like animation
                 flashView = UIView(frame: previewView!.frame)
-                flashView!.backgroundColor = UIColor.whiteColor()
+                flashView!.backgroundColor = UIColor.white
                 flashView!.alpha = 0.0
                 self.view.window?.addSubview(flashView!)
                 
-                UIView.animateWithDuration(0.4) {
+                UIView.animate(withDuration: 0.4, animations: {
                     self.flashView?.alpha = 1.0
-                }
+                }) 
             } else {
-                UIView.animateWithDuration(0.4,
+                UIView.animate(withDuration: 0.4,
                     animations: {
                         self.flashView?.alpha = 0.0
                     },
@@ -287,47 +287,47 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // utility routing used during image capture to set up capture orientation
-    private func avOrientationForDeviceOrientation(deviceOrientation: UIDeviceOrientation) -> AVCaptureVideoOrientation {
+    private func avOrientationForDeviceOrientation(_ deviceOrientation: UIDeviceOrientation) -> AVCaptureVideoOrientation {
         var result = AVCaptureVideoOrientation(rawValue: deviceOrientation.rawValue)!
-        if deviceOrientation == UIDeviceOrientation.LandscapeLeft {
-            result = AVCaptureVideoOrientation.LandscapeRight
-        } else if deviceOrientation == UIDeviceOrientation.LandscapeRight {
-            result = AVCaptureVideoOrientation.LandscapeLeft
+        if deviceOrientation == UIDeviceOrientation.landscapeLeft {
+            result = AVCaptureVideoOrientation.landscapeRight
+        } else if deviceOrientation == UIDeviceOrientation.landscapeRight {
+            result = AVCaptureVideoOrientation.landscapeLeft
         }
         return result
     }
     
     // utility routine to create a new image with the red square overlay with appropriate orientation
     // and return the new composited image which can be saved to the camera roll
-    private func newSquareOverlayedImageForFeatures(features: [CIFeature],
+    private func newSquareOverlayedImageForFeatures(_ features: [CIFeature],
         inCGImage backgroundImage: CGImage,
         withOrientation orientation: UIDeviceOrientation,
         frontFacing isFrontFacing: Bool) -> CGImage
     {
-        let backgroundImageRect = CGRectMake(0.0, 0.0, CGImageGetWidth(backgroundImage).g, CGImageGetHeight(backgroundImage).g)
+        let backgroundImageRect = CGRect(x: 0.0, y: 0.0, width: backgroundImage.width.g, height: backgroundImage.height.g)
         let bitmapContext = CreateCGBitmapContextForSize(backgroundImageRect.size)
-        CGContextClearRect(bitmapContext, backgroundImageRect)
-        CGContextDrawImage(bitmapContext, backgroundImageRect, backgroundImage)
+        bitmapContext?.clear(backgroundImageRect)
+        bitmapContext?.draw(backgroundImage, in: backgroundImageRect)
         var rotationDegrees: CGFloat = 0.0
         
         switch orientation {
-        case .Portrait:
+        case .portrait:
             rotationDegrees = -90.0
-        case .PortraitUpsideDown:
+        case .portraitUpsideDown:
             rotationDegrees = 90.0
-        case .LandscapeLeft:
+        case .landscapeLeft:
             if isFrontFacing {
                 rotationDegrees = 180.0
             } else {
                 rotationDegrees = 0.0
             }
-        case .LandscapeRight:
+        case .landscapeRight:
             if isFrontFacing {
                 rotationDegrees = 0.0
             } else {
                 rotationDegrees = 180.0
             }
-        case .FaceUp, .FaceDown:
+        case .faceUp, .faceDown:
             break
         default:
             break // leave the layer in its last known orientation
@@ -337,20 +337,21 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         // features found by the face detector
         for ff in features {
             let faceRect = ff.bounds
-            CGContextDrawImage(bitmapContext, faceRect, rotatedSquareImage.CGImage)
+            bitmapContext?.draw((rotatedSquareImage?.cgImage!)!, in: faceRect)
         }
-        let returnImage = CGBitmapContextCreateImage(bitmapContext)!
+        let returnImage = bitmapContext?.makeImage()!
         
-        return returnImage
+        return returnImage!
     }
     
     // utility routine used after taking a still image to write the resulting image to the camera roll
-    private func writeCGImageToCameraRoll(cgImage: CGImage, withMetadata metadata: [String: AnyObject]) -> Bool {
+    @discardableResult
+    private func writeCGImageToCameraRoll(_ cgImage: CGImage, withMetadata metadata: [String: AnyObject]) -> Bool {
         var success = true
         bail: do {
             let destinationData = CFDataCreateMutable(kCFAllocatorDefault, 0)
-            guard let destination = CGImageDestinationCreateWithData(destinationData,
-                "public.jpeg",
+            guard let destination = CGImageDestinationCreateWithData(destinationData!,
+                "public.jpeg" as CFString,
                 1,
                 nil)
                 else {
@@ -360,17 +361,17 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             
             let JPEGCompQuality: Float = 0.85 // JPEGHigherQuality
             
-            let optionsDict: [NSObject: AnyObject] = [
-                kCGImageDestinationLossyCompressionQuality: JPEGCompQuality,
+            let optionsDict: [AnyHashable: Any] = [
+                kCGImageDestinationLossyCompressionQuality as AnyHashable: JPEGCompQuality,
             ]
             
-            CGImageDestinationAddImage(destination, cgImage, optionsDict)
+            CGImageDestinationAddImage(destination, cgImage, optionsDict as CFDictionary?)
             success = CGImageDestinationFinalize(destination)
             
             guard success else {break bail}
             
             let library = ALAssetsLibrary()
-            library.writeImageDataToSavedPhotosAlbum(destinationData, metadata: metadata) {assetURL, error in
+            library.writeImageData(toSavedPhotosAlbum: destinationData as Data!, metadata: metadata) {assetURL, error in
             }
             
             
@@ -379,13 +380,13 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // utility routine to display error aleart if takePicture fails
-    private func displayErrorOnMainQueue(error: NSError, withMessage message: String) {
-        dispatch_async(dispatch_get_main_queue()) {
+    private func displayErrorOnMainQueue(_ error: NSError, withMessage message: String) {
+        DispatchQueue.main.async {
             if #available(iOS 8.0, *) {
-                let alertController = UIAlertController(title:  "\(message) (\(error.code)", message: error.localizedDescription, preferredStyle: .Alert)
-                let dismissAction = UIAlertAction(title: "Dismiss", style: .Cancel, handler: nil)
+                let alertController = UIAlertController(title:  "\(message) (\(error.code)", message: error.localizedDescription, preferredStyle: .alert)
+                let dismissAction = UIAlertAction(title: "Dismiss", style: .cancel, handler: nil)
                 alertController.addAction(dismissAction)
-                self.presentViewController(alertController, animated: true, completion: nil)
+                self.present(alertController, animated: true, completion: nil)
             } else {
                 let alertView = UIAlertView(title: "\(message) (\(error.code)", message: error.localizedDescription, delegate: nil, cancelButtonTitle: "Dismiss")
                 alertView.show()
@@ -397,55 +398,55 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     // the square overlay will be composited on top of the captured image and saved to the camera roll
     @IBAction func takePicture(_: AnyObject) {
         // Find out the current orientation and tell the still image output.
-        let stillImageConnection = stillImageOutput!.connectionWithMediaType(AVMediaTypeVideo)
-        let curDeviceOrientation = UIDevice.currentDevice().orientation
+        let stillImageConnection = stillImageOutput!.connection(withMediaType: AVMediaTypeVideo)
+        let curDeviceOrientation = UIDevice.current.orientation
         let avcaptureOrientation = self.avOrientationForDeviceOrientation(curDeviceOrientation)
-        stillImageConnection.videoOrientation = avcaptureOrientation
-        stillImageConnection.videoScaleAndCropFactor = effectiveScale
+        stillImageConnection?.videoOrientation = avcaptureOrientation
+        stillImageConnection?.videoScaleAndCropFactor = effectiveScale
         
         let doingFaceDetection = detectFaces && (effectiveScale == 1.0)
         
         // set the appropriate pixel format / image type output setting depending on if we'll need an uncompressed image for
         // the possiblity of drawing the red square over top or if we're just writing a jpeg to the camera roll which is the trival case
         if doingFaceDetection {
-            stillImageOutput!.outputSettings = [kCVPixelBufferPixelFormatTypeKey: kCMPixelFormat_32BGRA.l]
+            stillImageOutput!.outputSettings = [kCVPixelBufferPixelFormatTypeKey as AnyHashable: kCMPixelFormat_32BGRA.l]
         } else {
             stillImageOutput!.outputSettings = [AVVideoCodecKey: AVVideoCodecJPEG]
         }
         
-        stillImageOutput!.captureStillImageAsynchronouslyFromConnection(stillImageConnection) {
+        stillImageOutput!.captureStillImageAsynchronously(from: stillImageConnection) {
             imageDataSampleBuffer, error in
             if error != nil {
-                self.displayErrorOnMainQueue(error!, withMessage: "Take picture failed")
+                self.displayErrorOnMainQueue(error! as NSError, withMessage: "Take picture failed")
             } else {
                 if doingFaceDetection {
                     // Got an image.
-                    let pixelBuffer = CMSampleBufferGetImageBuffer(imageDataSampleBuffer)!
-                    let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, imageDataSampleBuffer, kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [String: AnyObject]?
-                    let ciImage = CIImage(CVPixelBuffer: pixelBuffer, options: attachments)
+                    let pixelBuffer = CMSampleBufferGetImageBuffer(imageDataSampleBuffer!)!
+                    let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, imageDataSampleBuffer!, kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [String: AnyObject]?
+                    let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: attachments)
                     
                     var imageOptions: [String: AnyObject] = [:]
-                    if let orientation = CMGetAttachment(imageDataSampleBuffer, kCGImagePropertyOrientation, nil) {
+                    if let orientation = CMGetAttachment(imageDataSampleBuffer!, kCGImagePropertyOrientation, nil) {
                         imageOptions = [CIDetectorImageOrientation: orientation]
                     }
                     
                     // when processing an existing frame we want any new frames to be automatically dropped
                     // queueing this block to execute on the videoDataOutputQueue serial queue ensures this
                     // see the header doc for setSampleBufferDelegate:queue: for more information
-                    dispatch_sync(self.videoDataOutputQueue!) {
+                    self.videoDataOutputQueue!.sync {
                         
                         // get the array of CIFeature instances in the given image with a orientation passed in
                         // the detection will be done based on the orientation but the coordinates in the returned features will
                         // still be based on those of the image.
-                        let features = self.faceDetector.featuresInImage(ciImage, options: imageOptions)
+                        let features = self.faceDetector.features(in: ciImage, options: imageOptions)
                         var srcImage: CGImage? = nil
-                        let err = CreateCGImageFromCVPixelBuffer(CMSampleBufferGetImageBuffer(imageDataSampleBuffer)!, &srcImage)
+                        let err = CreateCGImageFromCVPixelBuffer(CMSampleBufferGetImageBuffer(imageDataSampleBuffer!)!, &srcImage)
                         if err != noErr {fatalError()}
                         
                         let cgImageResult = self.newSquareOverlayedImageForFeatures(features, inCGImage: srcImage!, withOrientation: curDeviceOrientation, frontFacing: self.isUsingFrontFacingCamera)
                         
                         let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
-                            imageDataSampleBuffer,
+                            imageDataSampleBuffer!,
                             kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [String: AnyObject]
                         self.writeCGImageToCameraRoll(cgImageResult, withMetadata: attachments)
                         
@@ -455,12 +456,12 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                     // trivial simple JPEG case
                     let jpegData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(imageDataSampleBuffer)
                     let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
-                        imageDataSampleBuffer,
-                        kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [NSObject: AnyObject]
+                        imageDataSampleBuffer!,
+                        kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [AnyHashable: Any]
                     let library = ALAssetsLibrary()
-                    library.writeImageDataToSavedPhotosAlbum(jpegData, metadata: attachments) {assetURL, error in
+                    library.writeImageData(toSavedPhotosAlbum: jpegData, metadata: attachments) {assetURL, error in
                         if let error = error {
-                            self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                            self.displayErrorOnMainQueue(error as NSError, withMessage: "Save to camera roll failed")
                         }
                     }
                     
@@ -470,23 +471,23 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // turn on/off face detection
-    @IBAction func toggleFaceDetection(sender: UISwitch) {
-        detectFaces = sender.on
-        videoDataOutput?.connectionWithMediaType(AVMediaTypeVideo).enabled = detectFaces
+    @IBAction func toggleFaceDetection(_ sender: UISwitch) {
+        detectFaces = sender.isOn
+        videoDataOutput?.connection(withMediaType: AVMediaTypeVideo).isEnabled = detectFaces
         if !detectFaces {
-            dispatch_async(dispatch_get_main_queue()) {
+            DispatchQueue.main.async {
                 // clear out any squares currently displaying.
-                self.drawFaceBoxesForFeatures([], forVideoBox: CGRectZero, orientation: .Portrait)
+                self.drawFaceBoxesForFeatures([], forVideoBox: CGRect.zero, orientation: .portrait)
             }
         }
     }
     
     // find where the video box is positioned within the preview layer based on the video size and gravity
-    private static func videoPreviewBoxForGravity(gravity: String, frameSize: CGSize, apertureSize: CGSize) -> CGRect {
+    private static func videoPreviewBoxForGravity(_ gravity: String, frameSize: CGSize, apertureSize: CGSize) -> CGRect {
         let apertureRatio = apertureSize.height / apertureSize.width
         let viewRatio = frameSize.width / frameSize.height
         
-        var size = CGSizeZero
+        var size = CGSize.zero
         switch gravity {
         case AVLayerVideoGravityResizeAspectFill:
             if viewRatio > apertureRatio {
@@ -530,7 +531,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     
     // called asynchronously as the capture output is capturing sample buffers, this method asks the face detector (if on)
     // to detect features and for each draw the red square in a layer and set appropriate orientation
-    private func drawFaceBoxesForFeatures(features: [CIFeature], forVideoBox clap: CGRect, orientation: UIDeviceOrientation) {
+    private func drawFaceBoxesForFeatures(_ features: [CIFeature], forVideoBox clap: CGRect, orientation: UIDeviceOrientation) {
         let sublayers = previewLayer?.sublayers ?? []
         let sublayersCount = sublayers.count
         var currentSublayer = 0
@@ -542,7 +543,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         // hide all the face layers
         for layer in sublayers {
             if layer.name == "FaceLayer" {
-                layer.hidden = true
+                layer.isHidden = true
             }
         }
         
@@ -553,7 +554,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         
         let parentFrameSize = previewView.frame.size;
         let gravity = previewLayer?.videoGravity
-        let isMirrored = previewLayer?.connection.videoMirrored ?? false
+        let isMirrored = previewLayer?.connection.isVideoMirrored ?? false
         let previewBox = SquareCamViewController.videoPreviewBoxForGravity(gravity!,
             frameSize: parentFrameSize,
             apertureSize: clap.size)
@@ -580,9 +581,9 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             faceRect.origin.y *= heightScaleBy
             
             if isMirrored {
-                faceRect = CGRectOffset(faceRect, previewBox.origin.x + previewBox.size.width - faceRect.size.width - (faceRect.origin.x * 2), previewBox.origin.y)
+                faceRect = faceRect.offsetBy(dx: previewBox.origin.x + previewBox.size.width - faceRect.size.width - (faceRect.origin.x * 2), dy: previewBox.origin.y)
             } else {
-                faceRect = CGRectOffset(faceRect, previewBox.origin.x, previewBox.origin.y)
+                faceRect = faceRect.offsetBy(dx: previewBox.origin.x, dy: previewBox.origin.y)
             }
             
             var featureLayer: CALayer? = nil
@@ -592,29 +593,29 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                 let currentLayer = sublayers[currentSublayer];currentSublayer += 1
                 if currentLayer.name == "FaceLayer" {
                     featureLayer = currentLayer
-                    currentLayer.hidden = false
+                    currentLayer.isHidden = false
                 }
             }
             
             // create a new one if necessary
             if featureLayer == nil {
                 featureLayer = CALayer()
-                featureLayer!.contents = square.CGImage
+                featureLayer!.contents = square.cgImage
                 featureLayer!.name = "FaceLayer"
                 previewLayer?.addSublayer(featureLayer!)
             }
             featureLayer!.frame = faceRect
             
             switch orientation {
-            case .Portrait:
-                featureLayer!.setAffineTransform(CGAffineTransformMakeRotation(DegreesToRadians(0.0)))
-            case .PortraitUpsideDown:
-                featureLayer!.setAffineTransform(CGAffineTransformMakeRotation(DegreesToRadians(180.0)))
-            case .LandscapeLeft:
-                featureLayer!.setAffineTransform(CGAffineTransformMakeRotation(DegreesToRadians(90.0)))
-            case .LandscapeRight:
-                featureLayer!.setAffineTransform(CGAffineTransformMakeRotation(DegreesToRadians(-90.0)))
-            case .FaceUp, .FaceDown:
+            case .portrait:
+                featureLayer!.setAffineTransform(CGAffineTransform(rotationAngle: DegreesToRadians(0.0)))
+            case .portraitUpsideDown:
+                featureLayer!.setAffineTransform(CGAffineTransform(rotationAngle: DegreesToRadians(180.0)))
+            case .landscapeLeft:
+                featureLayer!.setAffineTransform(CGAffineTransform(rotationAngle: DegreesToRadians(90.0)))
+            case .landscapeRight:
+                featureLayer!.setAffineTransform(CGAffineTransform(rotationAngle: DegreesToRadians(-90.0)))
+            case .faceUp, .faceDown:
                 break
             default:
                 
@@ -626,12 +627,12 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         CATransaction.commit()
     }
     
-    func captureOutput(captureOutput: AVCaptureOutput!, didOutputSampleBuffer sampleBuffer: CMSampleBuffer!, fromConnection connection: AVCaptureConnection!) {
+    func captureOutput(_ captureOutput: AVCaptureOutput!, didOutputSampleBuffer sampleBuffer: CMSampleBuffer!, from connection: AVCaptureConnection!) {
         // got an image
         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)!
         let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, sampleBuffer, kCMAttachmentMode_ShouldPropagate) as NSDictionary? as! [String: AnyObject]?
-        let ciImage = CIImage(CVPixelBuffer: pixelBuffer, options: attachments)
-        let curDeviceOrientation = UIDevice.currentDevice().orientation
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: attachments)
+        let curDeviceOrientation = UIDevice.current.orientation
         var exifOrientation: Int = 0
         
         /* kCGImagePropertyOrientation values
@@ -653,28 +654,28 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         let PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM       = 8  //   8  =  0th row is on the left, and 0th column is the bottom.
         
         switch curDeviceOrientation {
-        case .PortraitUpsideDown:  // Device oriented vertically, home button on the top
+        case .portraitUpsideDown:  // Device oriented vertically, home button on the top
             exifOrientation = PHOTOS_EXIF_0ROW_LEFT_0COL_BOTTOM
-        case .LandscapeLeft:       // Device oriented horizontally, home button on the right
+        case .landscapeLeft:       // Device oriented horizontally, home button on the right
             if isUsingFrontFacingCamera {
                 exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT
             } else {
                 exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT
             }
-        case .LandscapeRight:      // Device oriented horizontally, home button on the left
+        case .landscapeRight:      // Device oriented horizontally, home button on the left
             if isUsingFrontFacingCamera {
                 exifOrientation = PHOTOS_EXIF_0ROW_TOP_0COL_LEFT
             } else {
                 exifOrientation = PHOTOS_EXIF_0ROW_BOTTOM_0COL_RIGHT
             }
-        case .Portrait:            // Device oriented vertically, home button on the bottom
+        case .portrait:            // Device oriented vertically, home button on the bottom
             fallthrough
         default:
             exifOrientation = PHOTOS_EXIF_0ROW_RIGHT_0COL_TOP
         }
         
         let imageOptions = [CIDetectorImageOrientation: exifOrientation]
-        let features = faceDetector.featuresInImage(ciImage, options: imageOptions)
+        let features = faceDetector.features(in: ciImage, options: imageOptions)
         
         // get the clean aperture
         // the clean aperture is a rectangle that defines the portion of the encoded pixel dimensions
@@ -682,7 +683,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         let fdesc = CMSampleBufferGetFormatDescription(sampleBuffer)!
         let clap = CMVideoFormatDescriptionGetCleanAperture(fdesc, false /*originIsTopLeft == false*/)
         
-        dispatch_async(dispatch_get_main_queue()) {
+        DispatchQueue.main.async {
             self.drawFaceBoxesForFeatures(features, forVideoBox: clap, orientation: curDeviceOrientation)
         }
     }
@@ -695,12 +696,12 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     @IBAction func switchCameras(_: AnyObject) {
         let desiredPosition: AVCaptureDevicePosition
         if isUsingFrontFacingCamera {
-            desiredPosition = AVCaptureDevicePosition.Back
+            desiredPosition = AVCaptureDevicePosition.back
         } else {
-            desiredPosition = AVCaptureDevicePosition.Front
+            desiredPosition = AVCaptureDevicePosition.front
         }
         
-        for d in AVCaptureDevice.devicesWithMediaType(AVMediaTypeVideo) as! [AVCaptureDevice] {
+        for d in AVCaptureDevice.devices(withMediaType: AVMediaTypeVideo) as! [AVCaptureDevice] {
             if d.position == desiredPosition {
                 previewLayer?.session.beginConfiguration()
                 var input: AVCaptureDeviceInput?
@@ -729,7 +730,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         // Do any additional setup after loading the view, typically from a nib.
         self.setupAVCapture()
         square = UIImage(named: "squarePNG")
-        let detectorOptions: [String: AnyObject] = [CIDetectorAccuracy: CIDetectorAccuracyLow]
+        let detectorOptions: [String: AnyObject] = [CIDetectorAccuracy: CIDetectorAccuracyLow as AnyObject]
         faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: detectorOptions)
     }
     
@@ -740,19 +741,19 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     //    // e.g. self.myOutlet = nil;
     //}
     
-    override func viewWillAppear(animated: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
     }
     
-    override func viewDidAppear(animated: Bool) {
+    override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
     }
     
-    override func viewWillDisappear(animated: Bool) {
+    override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
     }
     
-    override func viewDidDisappear(animated: Bool) {
+    override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
     }
     
@@ -761,14 +762,14 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     //    // Return YES for supported orientations
     //	return (interfaceOrientation == UIInterfaceOrientationPortrait);
     //}
-    override func supportedInterfaceOrientations() -> UIInterfaceOrientationMask {
-        return .Portrait
+    override var supportedInterfaceOrientations : UIInterfaceOrientationMask {
+        return .portrait
     }
-    override func preferredInterfaceOrientationForPresentation() -> UIInterfaceOrientation {
-        return .Portrait
+    override var preferredInterfaceOrientationForPresentation : UIInterfaceOrientation {
+        return .portrait
     }
     
-    func gestureRecognizerShouldBegin(gestureRecognizer: UIGestureRecognizer) -> Bool {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer is UIPinchGestureRecognizer {
             beginGestureScale = effectiveScale
         }
@@ -776,13 +777,13 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // scale image depending on users pinch gesture
-    @IBAction func handlePinchGesture(recognizer: UIPinchGestureRecognizer) {
+    @IBAction func handlePinchGesture(_ recognizer: UIPinchGestureRecognizer) {
         var allTouchesAreOnThePreviewLayer = true
-        let numTouches = recognizer.numberOfTouches()
+        let numTouches = recognizer.numberOfTouches
         for i in 0..<numTouches {
-            let location = recognizer.locationOfTouch(i, inView: previewView)
-            let convertedLocation = previewLayer!.convertPoint(location, fromLayer: previewLayer!.superlayer)
-            if !previewLayer!.containsPoint(convertedLocation) {
+            let location = recognizer.location(ofTouch: i, in: previewView)
+            let convertedLocation = previewLayer!.convert(location, from: previewLayer!.superlayer)
+            if !previewLayer!.contains(convertedLocation) {
                 allTouchesAreOnThePreviewLayer = false
                 break
             }
@@ -793,13 +794,13 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             if effectiveScale < 1.0 {
                 effectiveScale = 1.0
             }
-            let maxScaleAndCropFactor = stillImageOutput!.connectionWithMediaType(AVMediaTypeVideo).videoMaxScaleAndCropFactor
+            let maxScaleAndCropFactor = stillImageOutput!.connection(withMediaType: AVMediaTypeVideo).videoMaxScaleAndCropFactor
             if effectiveScale > maxScaleAndCropFactor {
                 effectiveScale = maxScaleAndCropFactor
             }
             CATransaction.begin()
             CATransaction.setAnimationDuration(0.025)
-            previewLayer!.setAffineTransform(CGAffineTransformMakeScale(effectiveScale, effectiveScale))
+            previewLayer!.setAffineTransform(CGAffineTransform(scaleX: effectiveScale, y: effectiveScale))
             CATransaction.commit()
         }
     }

@@ -40,7 +40,7 @@ import Foundation
 import CoreGraphics
 
 //GLboolean, Boolean
-extension UInt8: BooleanLiteralConvertible, BooleanType {
+extension UInt8: ExpressibleByBooleanLiteral {
     public var boolValue: Bool {
         return self != 0
     }
@@ -49,13 +49,13 @@ extension UInt8: BooleanLiteralConvertible, BooleanType {
     }
 }
 //GLint
-extension Int32: BooleanLiteralConvertible {
+extension Int32: ExpressibleByBooleanLiteral {
     public init(booleanLiteral value: BooleanLiteralType) {
         self = value ? Int32(1) : Int32(0)
     }
 }
 //cl_bool
-extension UInt32: BooleanLiteralConvertible {
+extension UInt32: ExpressibleByBooleanLiteral {
     public init(booleanLiteral value: BooleanLiteralType) {
         self = value ? UInt32(1) : UInt32(0)
     }
@@ -305,20 +305,14 @@ extension CGFloat {
 }
 
 //Int8
-extension CChar: UnicodeScalarLiteralConvertible {
-    //    public init(_ v: UnicodeScalar) {
-    //        self = CChar(v.value)
-    //    }
+extension CChar: ExpressibleByUnicodeScalarLiteral {
     public init(unicodeScalarLiteral value: UnicodeScalar) {
         self = CChar(value.value)
     }
 }
 
 //UInt16
-extension unichar: UnicodeScalarLiteralConvertible {
-    //    public init(_ v: UnicodeScalar) {
-    //        self = unichar(v.value)
-    //    }
+extension unichar: ExpressibleByUnicodeScalarLiteral {
     public init(unicodeScalarLiteral value: UnicodeScalar) {
         self = unichar(value.value)
     }
