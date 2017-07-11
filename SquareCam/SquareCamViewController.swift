@@ -57,7 +57,8 @@ import UIKit
 import AVFoundation
 import CoreImage
 import ImageIO
-import AssetsLibrary
+import AssetsLibrary    //for iOS 8
+import Photos           //for iOS 9+
 
 //MARK:-
 
@@ -353,21 +354,39 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             
             let JPEGCompQuality: Float = 0.85 // JPEGHigherQuality
             
-            let optionsDict: [AnyHashable: Any] = [
-                kCGImageDestinationLossyCompressionQuality: JPEGCompQuality,
-                kCGImageDestinationDateTime: Date(), //###
-            ]
-            
-            CGImageDestinationAddImage(destination, cgImage, optionsDict as CFDictionary?)
-            success = CGImageDestinationFinalize(destination)
-            
-            guard success else {break bail}
-            
-            let library = ALAssetsLibrary()
-            library.writeImageData(toSavedPhotosAlbum: destinationData as Data!, metadata: metadata) {assetURL, error in
+            if #available(iOS 9.0, *) {
+                var optionsDict = metadata
+                optionsDict[kCGImageDestinationLossyCompressionQuality as String] = JPEGCompQuality
+                CGImageDestinationAddImage(destination, cgImage, optionsDict as CFDictionary?)
+                
+                success = CGImageDestinationFinalize(destination)
+                
+                guard success else {break bail}
+                
+                PHPhotoLibrary.shared().performChanges({
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, data: destinationData as Data!, options: nil)
+                    request.creationDate = Date()
+                }) {bool, error in
+                    if let error = error as NSError? {
+                        self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                    }
+                }
+            } else {
+                let optionsDict: [AnyHashable: Any] = [
+                    kCGImageDestinationLossyCompressionQuality: JPEGCompQuality,
+                    kCGImageDestinationDateTime: Date(), //###
+                ]
+                
+                CGImageDestinationAddImage(destination, cgImage, optionsDict as CFDictionary?)
+                success = CGImageDestinationFinalize(destination)
+                
+                guard success else {break bail}
+                
+                let library = ALAssetsLibrary()
+                library.writeImageData(toSavedPhotosAlbum: destinationData as Data!, metadata: metadata) {assetURL, error in
+                }
             }
-            
-            
         }
         return success
     }
@@ -446,7 +465,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                             let dfExif = DateFormatter()
                             dfExif.locale = Locale(identifier: "en_POSIX_US")
                             dfExif.timeZone = TimeZone.current
-                            dfExif.dateFormat = "yyyy:MM:dd_HH:mm:ss"
+                            dfExif.dateFormat = "yyyy:MM:dd HH:mm:ss"
                             let nowExif = dfExif.string(for: now)
                             var replacesExif = false
                             if exif[kCGImagePropertyExifDateTimeOriginal as String] != nil {
@@ -468,16 +487,27 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                 } else {
                     // trivial simple JPEG case
                     let jpegData = AVCaptureStillImageOutput.jpegStillImageNSDataRepresentation(imageDataSampleBuffer!)
-                    let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
-                        imageDataSampleBuffer!,
-                        kCMAttachmentMode_ShouldPropagate) as! [AnyHashable: Any]
-                    let library = ALAssetsLibrary()
-                    library.writeImageData(toSavedPhotosAlbum: jpegData, metadata: attachments) {assetURL, error in
-                        if let error = error as NSError? {
-                            self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                    if #available(iOS 9.0, *) {
+                        PHPhotoLibrary.shared().performChanges({
+                            let request = PHAssetCreationRequest.forAsset()
+                            request.addResource(with: .photo, data: jpegData!, options: nil)
+                            request.creationDate = Date()
+                        }) {bool, error in
+                            if let error = error as NSError? {
+                                self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                            }
+                        }
+                    } else {
+                        let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
+                                                                        imageDataSampleBuffer!,
+                                                                        kCMAttachmentMode_ShouldPropagate) as! [AnyHashable: Any]
+                        let library = ALAssetsLibrary()
+                        library.writeImageData(toSavedPhotosAlbum: jpegData, metadata: attachments) {assetURL, error in
+                            if let error = error as NSError? {
+                                self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                            }
                         }
                     }
-                    
                 }
             }
         }
