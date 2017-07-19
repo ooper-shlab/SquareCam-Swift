@@ -17,8 +17,6 @@
 		1B867FDD139D4AD300AD6B47 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B867FDC139D4AD300AD6B47 /* UIKit.framework */; };
 		1B867FDF139D4AD300AD6B47 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B867FDE139D4AD300AD6B47 /* Foundation.framework */; };
 		1B867FE1139D4AD300AD6B47 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B867FE0139D4AD300AD6B47 /* CoreGraphics.framework */; };
-		1B867FF0139D4AD300AD6B47 /* MainStoryboard_iPhone.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1B867FEE139D4AD300AD6B47 /* MainStoryboard_iPhone.storyboard */; };
-		1B867FF3139D4AD300AD6B47 /* MainStoryboard_iPad.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1B867FF1139D4AD300AD6B47 /* MainStoryboard_iPad.storyboard */; };
 		2B0EF004170E3E3A008EDA06 /* Default-568h@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2B0EF003170E3E3A008EDA06 /* Default-568h@2x.png */; };
 		2BA4851013F1E6CC000BABB3 /* MainStoryboard_iPad.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2BA4850C13F1E6CC000BABB3 /* MainStoryboard_iPad.storyboard */; };
 		2BA4851113F1E6CC000BABB3 /* MainStoryboard_iPhone.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 2BA4850E13F1E6CC000BABB3 /* MainStoryboard_iPhone.storyboard */; };
@@ -83,7 +81,6 @@
 				1B867FE2139D4AD300AD6B47 /* SquareCam */,
 				1B867FDB139D4AD300AD6B47 /* Frameworks */,
 				1B867FD9139D4AD300AD6B47 /* Products */,
-				D7825AB71F12C04400A560CC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 			tabWidth = 4;
@@ -134,15 +131,6 @@
 				2BA4851513F1E6DB000BABB3 /* squarePNG.png */,
 			);
 			name = "Supporting Files";
-			sourceTree = "<group>";
-		};
-		D7825AB71F12C04400A560CC /* Recovered References */ = {
-			isa = PBXGroup;
-			children = (
-				1B867FEE139D4AD300AD6B47 /* MainStoryboard_iPhone.storyboard */,
-				1B867FF1139D4AD300AD6B47 /* MainStoryboard_iPad.storyboard */,
-			);
-			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -202,8 +190,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1B867FF0139D4AD300AD6B47 /* MainStoryboard_iPhone.storyboard in Resources */,
-				1B867FF3139D4AD300AD6B47 /* MainStoryboard_iPad.storyboard in Resources */,
 				2BA4851013F1E6CC000BABB3 /* MainStoryboard_iPad.storyboard in Resources */,
 				2BA4851113F1E6CC000BABB3 /* MainStoryboard_iPhone.storyboard in Resources */,
 				2BA4851813F1E6DB000BABB3 /* squarePNG.png in Resources */,
@@ -228,22 +214,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		1B867FEE139D4AD300AD6B47 /* MainStoryboard_iPhone.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-			);
-			name = MainStoryboard_iPhone.storyboard;
-			path = "/Users/edward/Downloads/AVFoundation Samples/419-Capturing from the Camera using AV Foundation on iOS 5/SquareCam/StacheCam";
-			sourceTree = "<absolute>";
-		};
-		1B867FF1139D4AD300AD6B47 /* MainStoryboard_iPad.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-			);
-			name = MainStoryboard_iPad.storyboard;
-			path = "/Users/edward/Downloads/AVFoundation Samples/419-Capturing from the Camera using AV Foundation on iOS 5/SquareCam/StacheCam";
-			sourceTree = "<absolute>";
-		};
 		2BA4850C13F1E6CC000BABB3 /* MainStoryboard_iPad.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -369,6 +339,7 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = SquareCam/Prefix.pch;
 				INFOPLIST_FILE = SquareCam/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = SquareCam;
@@ -390,6 +361,7 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = SquareCam/Prefix.pch;
 				INFOPLIST_FILE = SquareCam/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.apple.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = SquareCam;

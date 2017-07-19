@@ -807,18 +807,31 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             desiredPosition = AVCaptureDevice.Position.front
         }
         
-        for d in AVCaptureDevice.devices(for: .video) {
-            if d.position == desiredPosition {
-                previewLayer?.session?.beginConfiguration()
-                var input: AVCaptureDeviceInput?
-                do {
-                    input = try AVCaptureDeviceInput(device: d)
-                } catch {}
-                for oldInput in previewLayer?.session?.inputs as [AVCaptureInput]! ?? [] {
-                    previewLayer?.session?.removeInput(oldInput)
+        func configInput(for device: AVCaptureDevice) {
+            previewLayer?.session?.beginConfiguration()
+            var input: AVCaptureDeviceInput?
+            do {
+                input = try AVCaptureDeviceInput(device: device)
+            } catch {}
+            for oldInput in previewLayer?.session?.inputs as [AVCaptureInput]! ?? [] {
+                previewLayer?.session?.removeInput(oldInput)
+            }
+            previewLayer?.session?.addInput(input!)
+            previewLayer?.session?.commitConfiguration()
+        }
+        if #available(iOS 11.0, *) {
+            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: desiredPosition) {
+                configInput(for: device)
+            }
+        } else if #available(iOS 10.0, *) {
+            if let device = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: desiredPosition).devices.first {
+                configInput(for: device)
+            }
+        } else {
+            for d in AVCaptureDevice.devices(for: .video) {
+                if d.position == desiredPosition {
+                    configInput(for: d)
                 }
-                previewLayer?.session?.addInput(input!)
-                previewLayer?.session?.commitConfiguration()
             }
         }
         isUsingFrontFacingCamera = !isUsingFrontFacingCamera
