@@ -459,7 +459,11 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         if doingFaceDetection {
             outputFormat = [kCVPixelBufferPixelFormatTypeKey as String: kCMPixelFormat_32BGRA.l]
         } else {
-            outputFormat = [AVVideoCodecKey: AVVideoCodecJPEG]
+            if #available(iOS 11.0, *) {
+                outputFormat = [AVVideoCodecKey: AVVideoCodecType.jpeg]
+            } else {
+                outputFormat = [AVVideoCodecKey: AVVideoCodecJPEG]
+            }
         }
         let settings = AVCapturePhotoSettings(format: outputFormat)
 
