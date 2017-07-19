@@ -163,7 +163,25 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     private var videoDataOutput: AVCaptureVideoDataOutput?
     private var detectFaces: Bool = false
     private var videoDataOutputQueue: DispatchQueue?
-    private var stillImageOutput: AVCaptureStillImageOutput?
+    private var _captureOutput: AVCaptureOutput?
+    @available(iOS 10.0, *)
+    private var photoOutput: AVCapturePhotoOutput? {
+        get {
+            return _captureOutput as! AVCapturePhotoOutput?
+        }
+        set {
+            _captureOutput = newValue
+        }
+    }
+    @available(iOS, deprecated: 10.0)
+    private var stillImageOutput: AVCaptureStillImageOutput? {
+        get {
+            return _captureOutput as! AVCaptureStillImageOutput?
+        }
+        set {
+            _captureOutput = newValue
+        }
+    }
     private var flashView: UIView?
     private var square: UIImage!
     private var isUsingFrontFacingCamera: Bool = false
@@ -195,10 +213,17 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             }
             
             // Make a still image output
-            stillImageOutput = AVCaptureStillImageOutput()
-            stillImageOutput!.addObserver(self, forKeyPath: "capturingStillImage", options:.new, context: &AVCaptureStillImageIsCapturingStillImageContext_)
-            if session.canAddOutput(stillImageOutput!) {
-                session.addOutput(stillImageOutput!)
+            if #available(iOS 10.0, *) {
+                photoOutput = AVCapturePhotoOutput()
+                if session.canAddOutput(photoOutput!) {
+                    session.addOutput(photoOutput!)
+                }
+            } else {
+                stillImageOutput = AVCaptureStillImageOutput()
+                stillImageOutput!.addObserver(self, forKeyPath: "capturingStillImage", options:.new, context: &AVCaptureStillImageIsCapturingStillImageContext_)
+                if session.canAddOutput(stillImageOutput!) {
+                    session.addOutput(stillImageOutput!)
+                }
             }
             
             // Make a video data output
@@ -245,13 +270,18 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         if videoDataOutputQueue != nil {
             videoDataOutputQueue = nil
         }
-        stillImageOutput?.removeObserver(self, forKeyPath: "isCapturingStillImage")
-        stillImageOutput = nil
+        if #available(iOS 10.0, *) {
+            photoOutput = nil
+        } else {
+            stillImageOutput?.removeObserver(self, forKeyPath: "isCapturingStillImage")
+            stillImageOutput = nil
+        }
         previewLayer?.removeFromSuperlayer()
         previewLayer = nil
     }
     
     // perform a flash bulb animation using KVO to monitor the value of the capturingStillImage property of the AVCaptureStillImageOutput class
+    @available(iOS, deprecated: 10.0) //### uses AVCapturePhotoCaptureDelegate
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if context == &AVCaptureStillImageIsCapturingStillImageContext_ {
             let isCapturingStillImage = change![.newKey] as! Bool
@@ -280,7 +310,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     }
     
     // utility routing used during image capture to set up capture orientation
-    private func avOrientationForDeviceOrientation(_ deviceOrientation: UIDeviceOrientation) -> AVCaptureVideoOrientation {
+    private func avOrientation(for deviceOrientation: UIDeviceOrientation) -> AVCaptureVideoOrientation {
         var result = AVCaptureVideoOrientation(rawValue: deviceOrientation.rawValue)!
         if deviceOrientation == UIDeviceOrientation.landscapeLeft {
             result = AVCaptureVideoOrientation.landscapeRight
@@ -292,7 +322,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     
     // utility routine to create a new image with the red square overlay with appropriate orientation
     // and return the new composited image which can be saved to the camera roll
-    private func newSquareOverlayedImageForFeatures(_ features: [CIFeature],
+    private func newSquareOverlayedImage(for features: [CIFeature],
         inCGImage backgroundImage: CGImage,
         withOrientation orientation: UIDeviceOrientation,
         frontFacing isFrontFacing: Bool) -> CGImage
@@ -404,10 +434,43 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
     // main action method to take a still image -- if face detection has been turned on and a face has been detected
     // the square overlay will be composited on top of the captured image and saved to the camera roll
     @IBAction func takePicture(_: Any) {
+        if #available(iOS 10.0, *) {
+            takePictureWithPhotoOutput()
+        } else {
+            takePictureWithStillImageOutput()
+        }
+    }
+    @available(iOS 10.0, *)
+    private func takePictureWithPhotoOutput() {
+        // Find out the current orientation and tell the still image output.
+        guard let photoConnection = photoOutputVideoConnection else {
+            print("photoOutputVideoConnection == nil");return
+        }
+        let curDeviceOrientation = UIDevice.current.orientation
+        let avcaptureOrientation = self.avOrientation(for: curDeviceOrientation)
+        photoConnection.videoOrientation = avcaptureOrientation
+        photoConnection.videoScaleAndCropFactor = effectiveScale
+        
+        let doingFaceDetection = detectFaces && (effectiveScale == 1.0)
+        
+        // set the appropriate pixel format / image type output setting depending on if we'll need an uncompressed image for
+        // the possiblity of drawing the red square over top or if we're just writing a jpeg to the camera roll which is the trival case
+        var outputFormat: [String: Any] = [:]
+        if doingFaceDetection {
+            outputFormat = [kCVPixelBufferPixelFormatTypeKey as String: kCMPixelFormat_32BGRA.l]
+        } else {
+            outputFormat = [AVVideoCodecKey: AVVideoCodecJPEG]
+        }
+        let settings = AVCapturePhotoSettings(format: outputFormat)
+
+        photoOutput?.capturePhoto(with: settings, delegate: self)
+    }
+    @available(iOS, deprecated: 10.0)
+    private func takePictureWithStillImageOutput() {
         // Find out the current orientation and tell the still image output.
         let stillImageConnection = stillImageOutput!.connection(with: .video)
         let curDeviceOrientation = UIDevice.current.orientation
-        let avcaptureOrientation = self.avOrientationForDeviceOrientation(curDeviceOrientation)
+        let avcaptureOrientation = self.avOrientation(for: curDeviceOrientation)
         stillImageConnection?.videoOrientation = avcaptureOrientation
         stillImageConnection?.videoScaleAndCropFactor = effectiveScale
         
@@ -450,7 +513,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
                         let err = CreateCGImageFromCVPixelBuffer(CMSampleBufferGetImageBuffer(imageDataSampleBuffer!)!, &srcImage)
                         if err != noErr {fatalError()}
                         
-                        let cgImageResult = self.newSquareOverlayedImageForFeatures(features, inCGImage: srcImage!, withOrientation: curDeviceOrientation, frontFacing: self.isUsingFrontFacingCamera)
+                        let cgImageResult = self.newSquareOverlayedImage(for: features, inCGImage: srcImage!, withOrientation: curDeviceOrientation, frontFacing: self.isUsingFrontFacingCamera)
                         //### CMCopyDictionaryOfAttachments does not return valid EXIF dates,
                         // when device's date format set to Japanes-Calendar.
 //                        let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
@@ -837,7 +900,7 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             if effectiveScale < 1.0 {
                 effectiveScale = 1.0
             }
-            let maxScaleAndCropFactor = stillImageOutput!.connection(with: .video)?.videoMaxScaleAndCropFactor
+            let maxScaleAndCropFactor = photoOutputVideoConnection?.videoMaxScaleAndCropFactor
             if effectiveScale > maxScaleAndCropFactor! {
                 effectiveScale = maxScaleAndCropFactor!
             }
@@ -848,4 +911,137 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         }
     }
     
+    //MARK: ### compatibility...
+    
+    private var photoOutputVideoConnection: AVCaptureConnection? {
+        if #available(iOS 10.0, *) {
+            return photoOutput?.connection(with: .video)
+        } else {
+            return stillImageOutput?.connection(with: .video)
+        }
+    }
+}
+
+@available(iOS 10.0, *)
+extension SquareCamViewController: AVCapturePhotoCaptureDelegate {
+    func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        // do flash bulb like animation
+        flashView = UIView(frame: previewView!.frame)
+        flashView!.backgroundColor = .white
+        flashView!.alpha = 0.0
+        self.view.window?.addSubview(flashView!)
+        
+        UIView.animate(withDuration: 0.4, animations: {
+            self.flashView?.alpha = 1.0
+        })
+    }
+    func photoOutput(_ output: AVCapturePhotoOutput, didCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        UIView.animate(withDuration: 0.4,
+                       animations: {
+                        self.flashView?.alpha = 0.0
+        },
+                       completion: {finished in
+                        self.flashView?.removeFromSuperview()
+                        self.flashView = nil;
+        })
+    }
+    //### not ready for using iOS11 feature...
+//    @available(iOS 11.0, *)
+//    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+//        //
+//    }
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        // clean up resources used for photo capturing...
+    }
+    //### This app does not capture LivePhotos.
+//    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingLivePhotoToMovieFileAt outputFileURL: URL, duration: CMTime, photoDisplayTime: CMTime, resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+//        //
+//    }
+//    func photoOutput(_ output: AVCapturePhotoOutput, didFinishRecordingLivePhotoMovieForEventualFileAt outputFileURL: URL, resolvedSettings: AVCaptureResolvedPhotoSettings) {
+//        //
+//    }
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photoSampleBuffer: CMSampleBuffer?, previewPhoto previewPhotoSampleBuffer: CMSampleBuffer?, resolvedSettings: AVCaptureResolvedPhotoSettings, bracketSettings: AVCaptureBracketedStillImageSettings?, error: Error?) {
+        if let error = error as NSError? {
+            self.displayErrorOnMainQueue(error, withMessage: "Take picture failed")
+        } else {
+            let doingFaceDetection = detectFaces && (effectiveScale == 1.0)
+            
+            if doingFaceDetection {
+                // Got an image.
+                let pixelBuffer = CMSampleBufferGetImageBuffer(photoSampleBuffer!)!
+                let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault, photoSampleBuffer!, kCMAttachmentMode_ShouldPropagate) as! [String: Any]?
+                let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: attachments)
+                
+                var imageOptions: [String: Any] = [:]
+                if let orientation = CMGetAttachment(photoSampleBuffer!, kCGImagePropertyOrientation, nil) {
+                    imageOptions = [CIDetectorImageOrientation: orientation]
+                }
+                
+                // when processing an existing frame we want any new frames to be automatically dropped
+                // queueing this block to execute on the videoDataOutputQueue serial queue ensures this
+                // see the header doc for setSampleBufferDelegate:queue: for more information
+                self.videoDataOutputQueue!.sync {
+                    
+                    // get the array of CIFeature instances in the given image with a orientation passed in
+                    // the detection will be done based on the orientation but the coordinates in the returned features will
+                    // still be based on those of the image.
+                    let features = self.faceDetector.features(in: ciImage, options: imageOptions)
+                    var srcImage: CGImage? = nil
+                    let err = CreateCGImageFromCVPixelBuffer(CMSampleBufferGetImageBuffer(photoSampleBuffer!)!, &srcImage)
+                    if err != noErr {fatalError()}
+                    
+                    let curDeviceOrientation = UIDevice.current.orientation
+                    let cgImageResult = self.newSquareOverlayedImage(for: features, inCGImage: srcImage!, withOrientation: curDeviceOrientation, frontFacing: self.isUsingFrontFacingCamera)
+                    //### CMCopyDictionaryOfAttachments does not return valid EXIF dates,
+                    // when device's date format set to Japanes-Calendar.
+                    //                        let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
+                    //                            imageDataSampleBuffer!,
+                    //                            kCMAttachmentMode_ShouldPropagate) as! [String: Any]
+                    var attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
+                                                                    photoSampleBuffer!,
+                                                                    kCMAttachmentMode_ShouldPropagate) as! [String: Any]
+                    
+                    if var exif = attachments["{Exif}"] as? [String: Any] {
+                        let now = Date()
+                        let dfExif = DateFormatter()
+                        dfExif.locale = Locale(identifier: "en_POSIX_US")
+                        dfExif.timeZone = TimeZone.current
+                        dfExif.dateFormat = "yyyy:MM:dd HH:mm:ss"
+                        let nowExif = dfExif.string(for: now)
+                        var replacesExif = false
+                        if exif[kCGImagePropertyExifDateTimeOriginal as String] != nil {
+                            exif[kCGImagePropertyExifDateTimeOriginal as String] = nowExif
+                            replacesExif = true
+                        }
+                        if exif[kCGImagePropertyExifDateTimeDigitized as String] != nil {
+                            exif[kCGImagePropertyExifDateTimeDigitized as String] = nowExif
+                            replacesExif = true
+                        }
+                        if replacesExif {
+                            attachments[kCGImagePropertyExifDictionary as String] = exif
+                        }
+                    }
+                    self.writeCGImageToCameraRoll(cgImageResult, withMetadata: attachments)
+                    
+                }
+                
+            } else {
+                // trivial simple JPEG case
+                let jpegData = AVCapturePhotoOutput.jpegPhotoDataRepresentation(forJPEGSampleBuffer: photoSampleBuffer!, previewPhotoSampleBuffer: previewPhotoSampleBuffer)
+                PHPhotoLibrary.shared().performChanges({
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, data: jpegData!, options: nil)
+                    request.creationDate = Date()
+                }) {bool, error in
+                    if let error = error as NSError? {
+                        self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                    }
+                }
+            }
+        }
+    }
+    //### This app does not use raw photo.
+//    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingRawPhoto rawSampleBuffer: CMSampleBuffer?, previewPhoto previewPhotoSampleBuffer: CMSampleBuffer?, resolvedSettings: AVCaptureResolvedPhotoSettings, bracketSettings: AVCaptureBracketedStillImageSettings?, error: Error?) {
+//        //
+//    }
 }
