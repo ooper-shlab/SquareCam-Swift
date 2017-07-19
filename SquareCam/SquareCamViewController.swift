@@ -962,11 +962,90 @@ extension SquareCamViewController: AVCapturePhotoCaptureDelegate {
                         self.flashView = nil;
         })
     }
-    //### not ready for using iOS11 feature...
-//    @available(iOS 11.0, *)
-//    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-//        //
-//    }
+    @available(iOS 11.0, *)
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if let error = error as NSError? {
+            self.displayErrorOnMainQueue(error, withMessage: "Take picture failed")
+        } else {
+            let doingFaceDetection = detectFaces && (effectiveScale == 1.0)
+            
+            if doingFaceDetection {
+                // Got an image.
+                let pixelBuffer = photo.pixelBuffer!
+                let attachments = photo.metadata
+                let ciImage = CIImage(cvPixelBuffer: pixelBuffer, options: attachments)
+                
+                var imageOptions: [String: Any] = [:]
+                if let orientation = attachments[kCGImagePropertyOrientation as String] {
+                    imageOptions = [CIDetectorImageOrientation: orientation]
+                }
+                
+                // when processing an existing frame we want any new frames to be automatically dropped
+                // queueing this block to execute on the videoDataOutputQueue serial queue ensures this
+                // see the header doc for setSampleBufferDelegate:queue: for more information
+                self.videoDataOutputQueue!.sync {
+                    
+                    // get the array of CIFeature instances in the given image with a orientation passed in
+                    // the detection will be done based on the orientation but the coordinates in the returned features will
+                    // still be based on those of the image.
+                    let features = self.faceDetector.features(in: ciImage, options: imageOptions)
+                    guard let srcImage = photo.cgImageRepresentation()?.takeUnretainedValue() else {
+                        fatalError()
+                    }
+                    
+                    let curDeviceOrientation = UIDevice.current.orientation
+                    let cgImageResult = self.newSquareOverlayedImage(for: features, inCGImage: srcImage, withOrientation: curDeviceOrientation, frontFacing: self.isUsingFrontFacingCamera)
+                    //### CMCopyDictionaryOfAttachments does not return valid EXIF dates,
+                    // when device's date format set to Japanes-Calendar.
+                    //                        let attachments = CMCopyDictionaryOfAttachments(kCFAllocatorDefault,
+                    //                            imageDataSampleBuffer!,
+                    //                            kCMAttachmentMode_ShouldPropagate) as! [String: Any]
+                    //### As far as I tested with iOS 11 beta 3, this modification is not needed
+                    #if NEEDS_ADJUSTING_EXIF_DATES
+                    var attachments = photo.metadata
+                    
+                    if var exif = attachments["{Exif}"] as? [String: Any] {
+                        let now = Date()
+                        let dfExif = DateFormatter()
+                        dfExif.locale = Locale(identifier: "en_POSIX_US")
+                        dfExif.timeZone = TimeZone.current
+                        dfExif.dateFormat = "yyyy:MM:dd HH:mm:ss"
+                        let nowExif = dfExif.string(for: now)
+                        var replacesExif = false
+                        if exif[kCGImagePropertyExifDateTimeOriginal as String] != nil {
+                            exif[kCGImagePropertyExifDateTimeOriginal as String] = nowExif
+                            replacesExif = true
+                        }
+                        if exif[kCGImagePropertyExifDateTimeDigitized as String] != nil {
+                            exif[kCGImagePropertyExifDateTimeDigitized as String] = nowExif
+                            replacesExif = true
+                        }
+                        if replacesExif {
+                            attachments[kCGImagePropertyExifDictionary as String] = exif
+                        }
+                    }
+                    #else
+                        let attachments = photo.metadata
+                    #endif
+                    self.writeCGImageToCameraRoll(cgImageResult, withMetadata: attachments)
+                    
+                }
+                
+            } else {
+                // trivial simple JPEG case
+                let jpegData = photo.fileDataRepresentation()
+                PHPhotoLibrary.shared().performChanges({
+                    let request = PHAssetCreationRequest.forAsset()
+                    request.addResource(with: .photo, data: jpegData!, options: nil)
+                    request.creationDate = Date()
+                }) {success, error in
+                    if let error = error as NSError? {
+                        self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
+                    }
+                }
+            }
+        }
+    }
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
         // clean up resources used for photo capturing...
     }
@@ -977,6 +1056,7 @@ extension SquareCamViewController: AVCapturePhotoCaptureDelegate {
 //    func photoOutput(_ output: AVCapturePhotoOutput, didFinishRecordingLivePhotoMovieForEventualFileAt outputFileURL: URL, resolvedSettings: AVCaptureResolvedPhotoSettings) {
 //        //
 //    }
+    @available(iOS, deprecated: 11.0)
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photoSampleBuffer: CMSampleBuffer?, previewPhoto previewPhotoSampleBuffer: CMSampleBuffer?, resolvedSettings: AVCaptureResolvedPhotoSettings, bracketSettings: AVCaptureBracketedStillImageSettings?, error: Error?) {
         if let error = error as NSError? {
             self.displayErrorOnMainQueue(error, withMessage: "Take picture failed")
@@ -1049,7 +1129,7 @@ extension SquareCamViewController: AVCapturePhotoCaptureDelegate {
                     let request = PHAssetCreationRequest.forAsset()
                     request.addResource(with: .photo, data: jpegData!, options: nil)
                     request.creationDate = Date()
-                }) {bool, error in
+                }) {success, error in
                     if let error = error as NSError? {
                         self.displayErrorOnMainQueue(error, withMessage: "Save to camera roll failed")
                     }
