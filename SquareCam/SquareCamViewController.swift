@@ -855,6 +855,8 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
         square = UIImage(named: "squarePNG")
         let detectorOptions: [String: Any] = [CIDetectorAccuracy: CIDetectorAccuracyLow]
         faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: detectorOptions)
+        //
+        requestPhotoLibraryAuthentication()
     }
     
     //- (void)viewDidUnload
@@ -935,6 +937,19 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             return photoOutput?.connection(with: .video)
         } else {
             return stillImageOutput?.connection(with: .video)
+        }
+    }
+
+    //### request for PhotoLibrary authentication (simplified)
+    private func requestPhotoLibraryAuthentication() {
+        let status = PHPhotoLibrary.authorizationStatus()
+        switch status {
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization {status in
+                //### For practical usage, show alert, update UI, guide to settings...
+            }
+        default:
+            break
         }
     }
 }
