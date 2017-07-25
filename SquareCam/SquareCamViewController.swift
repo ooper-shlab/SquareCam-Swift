@@ -824,11 +824,17 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             previewLayer?.session?.commitConfiguration()
         }
         if #available(iOS 11.0, *) {
-            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: desiredPosition) {
+            //### Cannot find Swift version of `defaultDeviceWithDeviceType:mediaType:position:`.
+            //### Bug of SDK 11 beta 4? Or renamed to something else?
+            //### Maybe a temporary regression in beta 4, so wait till fixed using hidden version.
+            if let device = AVCaptureDevice.__defaultDevice(withDeviceType: .builtInWideAngleCamera, mediaType: .video, position: desiredPosition) {
+//            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: desiredPosition) {
                 configInput(for: device)
             }
         } else if #available(iOS 10.0, *) {
-            if let device = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: desiredPosition).devices.first {
+            //### In iOS 11 SDK beta 4, AVCaptureDevice.DiscoverySession has only `__` leaded initializer.
+            //### Implementation of Swift-y version of initializer in progress?
+            if let device = AVCaptureDevice.DiscoverySession(__deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: desiredPosition).devices.first {
                 configInput(for: device)
             }
         } else {
@@ -956,26 +962,31 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
 
 @available(iOS 10.0, *)
 extension SquareCamViewController: AVCapturePhotoCaptureDelegate {
+    //AVCapturePhotoOutput invokes the AVCapturePhotoCaptureDelegate callbacks on a common dispatch queue — not necessarily the main queue.
     func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-        // do flash bulb like animation
-        flashView = UIView(frame: previewView!.frame)
-        flashView!.backgroundColor = .white
-        flashView!.alpha = 0.0
-        self.view.window?.addSubview(flashView!)
-        
-        UIView.animate(withDuration: 0.4, animations: {
-            self.flashView?.alpha = 1.0
-        })
+        DispatchQueue.main.async {
+            // do flash bulb like animation
+            self.flashView = UIView(frame: self.previewView!.frame)
+            self.flashView!.backgroundColor = .white
+            self.flashView!.alpha = 0.0
+            self.view.window?.addSubview(self.flashView!)
+            
+            UIView.animate(withDuration: 0.4, animations: {
+                self.flashView?.alpha = 1.0
+            })
+        }
     }
     func photoOutput(_ output: AVCapturePhotoOutput, didCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
-        UIView.animate(withDuration: 0.4,
-                       animations: {
-                        self.flashView?.alpha = 0.0
-        },
-                       completion: {finished in
-                        self.flashView?.removeFromSuperview()
-                        self.flashView = nil;
-        })
+        DispatchQueue.main.async {
+            UIView.animate(withDuration: 0.4,
+                           animations: {
+                            self.flashView?.alpha = 0.0
+            },
+                           completion: {finished in
+                            self.flashView?.removeFromSuperview()
+                            self.flashView = nil;
+            })
+        }
     }
     @available(iOS 11.0, *)
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
