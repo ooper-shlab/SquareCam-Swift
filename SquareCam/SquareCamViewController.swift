@@ -824,17 +824,13 @@ class SquareCamViewController: UIViewController, UIGestureRecognizerDelegate, AV
             previewLayer?.session?.commitConfiguration()
         }
         if #available(iOS 11.0, *) {
-            //### Cannot find Swift version of `defaultDeviceWithDeviceType:mediaType:position:`.
-            //### Bug of SDK 11 beta 4? Or renamed to something else?
-            //### Maybe a temporary regression in beta 4, so wait till fixed using hidden version.
-            if let device = AVCaptureDevice.__defaultDevice(withDeviceType: .builtInWideAngleCamera, mediaType: .video, position: desiredPosition) {
-//            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: desiredPosition) {
+            //### New method name introduced in Xcode 9 beta 5
+            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: desiredPosition) {
                 configInput(for: device)
             }
         } else if #available(iOS 10.0, *) {
-            //### In iOS 11 SDK beta 4, AVCaptureDevice.DiscoverySession has only `__` leaded initializer.
-            //### Implementation of Swift-y version of initializer in progress?
-            if let device = AVCaptureDevice.DiscoverySession(__deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: desiredPosition).devices.first {
+            //### Method signature reverted in Xcode 9 beta 5
+            if let device = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: desiredPosition).devices.first {
                 configInput(for: device)
             }
         } else {
